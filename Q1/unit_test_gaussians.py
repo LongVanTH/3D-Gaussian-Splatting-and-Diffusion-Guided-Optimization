@@ -237,21 +237,25 @@ def run_tests():
     total = 4
 
     if run_test_1():
+        print("Test 1 Pass!")
         counter += 1
     else:
         print("Test 1 Fail!")
 
     if run_test_2():
+        print("Test 2 Pass!")
         counter += 1
     else:
         print("Test 2 Fail!")
 
     if run_test_3():
+        print("Test 3 Pass!")
         counter += 1
     else:
         print("Test 3 Fail!")
 
     if run_test_4():
+        print("Test 4 Pass!")
         counter += 1
     else:
         print("Test 4 Fail!")

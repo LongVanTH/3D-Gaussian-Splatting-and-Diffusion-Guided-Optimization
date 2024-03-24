@@ -745,5 +745,7 @@ class Scene:
         ### YOUR CODE HERE ###
         # HINT: Think about how to get the camera origin in the world frame.
         # HINT: Do not forget to normalize the computed directions.
-        gaussian_dirs = None  # (N, 3)
+        cam_origin = camera.get_camera_center()
+        gaussian_dirs = means_3D - cam_origin
+        gaussian_dirs = torch.nn.functional.normalize(gaussian_dirs, p=2, dim=-1)  # (N, 3)
         return gaussian_dirs

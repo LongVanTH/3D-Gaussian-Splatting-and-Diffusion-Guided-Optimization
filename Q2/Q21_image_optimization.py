@@ -32,7 +32,7 @@ def optimize_an_image(
 
     # Step 3. Create optimizer and loss function
     optimizer = torch.optim.AdamW([latents], lr=1e-1, weight_decay=0)
-    total_iter = 2000
+    total_iter = 1000
     scheduler = get_cosine_schedule_with_warmup(optimizer, 100, int(total_iter * 1.5))
 
     # Step 4. Training loop to optimize the latents
@@ -42,9 +42,15 @@ def optimize_an_image(
         
         ### YOUR CODE HERE ###
         if args.sds_guidance:
-            loss = 
+            guidance_scale = 100
         else:
-            loss = 
+            guidance_scale = 0
+        loss = sds.sds_loss(
+            latents = latents,
+            text_embeddings = embeddings['default'],
+            text_embeddings_uncond = embeddings['uncond'],
+            guidance_scale = guidance_scale
+        )
 
         # Backward pass
         loss.backward()
@@ -54,7 +60,7 @@ def optimize_an_image(
         # clamping the latents to avoid over saturation
         latents.data = latents.data.clip(-1, 1)
 
-        if i % log_interval == 0 or i == total_iter - 1:
+        if i % log_interval == 0:
             # Decode the image to visualize the progress
             img = sds.decode_latents(latents.detach())
             # Save the image
@@ -64,7 +70,8 @@ def optimize_an_image(
                 f"output_{prompt[0].replace(' ', '_')}_iter_{i}.png",
             )
             output_im.save(output_path)
-
+            
+    img = sds.decode_latents(latents.detach())
     return img
 
 

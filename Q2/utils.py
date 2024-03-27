@@ -1,6 +1,6 @@
 import math
 from typing import List
-
+import os
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
@@ -121,7 +121,7 @@ def render_360_views(mesh, renderer, device, dist=3, elev=0, output_path=None):
     images = [img_as_ubyte(img) for img in images]
 
     # save a gif of the 360 rotation
-    imageio.mimsave(output_path, images, fps=15)
+    imageio.mimwrite(output_path, images, fps=15, loop=0)
 
 
 from pytorch3d.io import load_obj, load_objs_as_meshes
@@ -139,7 +139,7 @@ def init_mesh(
     return mesh, verts, faces, aux
 
 
-# calculate the text embs.
+# calculate the text embeddings.
 @torch.no_grad()
 def prepare_embeddings(sds, prompt, neg_prompt="", view_dependent=False):
     # text embeddings (stable-diffusion)
@@ -154,3 +154,11 @@ def prepare_embeddings(sds, prompt, neg_prompt="", view_dependent=False):
         for d in ["front", "side", "back"]:
             embeddings[d] = sds.get_text_embeddings([f"{prompt}, {d} view"])
     return embeddings
+
+def gif_from_folder(folder_path, log_interval=100, total_iter=1000):
+    images = []
+    for i in range(0, total_iter, log_interval):
+        img_path = os.path.join(folder_path, f"output_iter_{i}.png")
+        images.append(imageio.imread(img_path))
+    images.append(imageio.imread(os.path.join(folder_path, f"output.png")))
+    imageio.mimwrite(os.path.join(folder_path, "output.gif"), images, fps=10, loop=0)

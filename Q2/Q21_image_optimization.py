@@ -8,7 +8,7 @@ import torch.nn as nn
 from PIL import Image
 from SDS import SDS
 from tqdm import tqdm
-from utils import get_cosine_schedule_with_warmup, prepare_embeddings, seed_everything
+from utils import get_cosine_schedule_with_warmup, prepare_embeddings, seed_everything, gif_from_folder
 
 
 def optimize_an_image(
@@ -16,6 +16,7 @@ def optimize_an_image(
     prompt,
     neg_prompt="",
     img=None,
+    total_iter=1000,
     log_interval=100,
     args=None
 ):
@@ -32,7 +33,6 @@ def optimize_an_image(
 
     # Step 3. Create optimizer and loss function
     optimizer = torch.optim.AdamW([latents], lr=1e-1, weight_decay=0)
-    total_iter = 1000
     scheduler = get_cosine_schedule_with_warmup(optimizer, 100, int(total_iter * 1.5))
 
     # Step 4. Training loop to optimize the latents
@@ -67,7 +67,7 @@ def optimize_an_image(
             output_im = Image.fromarray(img.astype("uint8"))
             output_path = os.path.join(
                 sds.output_dir,
-                f"output_{prompt[0].replace(' ', '_')}_iter_{i}.png",
+                f"output_iter_{i}.png",
             )
             output_im.save(output_path)
             
@@ -80,6 +80,8 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, default="a hamburger")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", type=str, default="output")
+    parser.add_argument("--total_iter", type=int, default=1000)
+    parser.add_argument("--log_interval", type=int, default=100)
     parser.add_argument("--sds_guidance", type=int, default=0, choices=[0, 1], help="boolen option to add guidance to the SDS loss")
     parser.add_argument(
         "--postfix",
@@ -105,7 +107,7 @@ if __name__ == "__main__":
     # optimize an image
     prompt = args.prompt
     start_time = time.time()
-    img = optimize_an_image(sds, prompt=prompt, args=args)
+    img = optimize_an_image(sds, prompt=prompt, args=args, total_iter=args.total_iter, log_interval=args.log_interval)
     print(f"Optimization took {time.time() - start_time:.2f} seconds")
 
     # save the output image
@@ -113,3 +115,6 @@ if __name__ == "__main__":
     output_path = os.path.join(output_dir, f"output.png")
     print(f"Saving image to {output_path}")
     img.save(output_path)
+
+    # save gif
+    gif_from_folder(output_dir, log_interval=args.log_interval, total_iter=args.total_iter)

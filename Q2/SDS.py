@@ -170,8 +170,9 @@ class SDS:
                     timestep = t,
                     encoder_hidden_states = text_embeddings_uncond
                 )
-                noise_pred = noise_pred + guidance_scale * (
-                    noise_pred_text['sample'] - noise_pred_uncond['sample']
+                uncond = noise_pred_uncond['sample']
+                noise_pred = uncond + guidance_scale * (
+                    noise_pred - uncond
                 )
 
         # Compute SDS loss

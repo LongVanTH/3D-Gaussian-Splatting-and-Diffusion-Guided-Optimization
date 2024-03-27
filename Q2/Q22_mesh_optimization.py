@@ -22,6 +22,7 @@ from utils import (
     prepare_embeddings,
     render_360_views,
     seed_everything,
+    gif_from_folder,
 )
 
 
@@ -31,6 +32,7 @@ def optimize_mesh_texture(
     prompt,
     neg_prompt="",
     device="cpu",
+    total_iter=1001,
     log_interval=100,
     save_mesh=True,
     args=None,
@@ -48,7 +50,7 @@ def optimize_mesh_texture(
     vertices = vertices.unsqueeze(0).to(device)  # (N_v, 3) -> (1, N_v, 3)
     faces = faces.unsqueeze(0).to(device)  # (N_f, 3) -> (1, N_f, 3)
 
-    # Step 2.1 Initialize a randome texture map (optimizable parameter)
+    # Step 2.1 Initialize a random texture map (optimizable parameter)
     # create a texture field with implicit function
     color_field = ColorField().to(device)  # input (1, N_v, xyz) -> output (1, N_v, rgb)
     mesh = pytorch3d.structures.Meshes(
@@ -84,7 +86,6 @@ def optimize_mesh_texture(
 
     # Step 4. Create optimizer training parameters
     optimizer = torch.optim.AdamW(color_field.parameters(), lr=5e-4, weight_decay=0)
-    total_iter = 2000
     scheduler = get_cosine_schedule_with_warmup(optimizer, 100, int(total_iter * 1.5))
 
     # Step 5. Training loop to optimize the texture map
@@ -100,13 +101,20 @@ def optimize_mesh_texture(
 
         # Forward pass
         # Render a randomly sampled camera view to optimize in this iteration
-        rend = 
+        if len(query_cameras) == 0:
+            R, T = look_at_view_transform(3, 0, np.random.randint(0, 360))
+            camera = FoVPerspectiveCameras(device=device, R=R, T=T)[0]
+        rend = renderer(mesh, cameras=camera, lights=lights)[..., :3]  # (1, 512, 512, 3)
+        rend = rend.permute(0, 3, 1, 2)
         # Encode the rendered image to latents
-        latents = 
+        latents = sds.encode_imgs(rend)[0].unsqueeze(0)  # (1, 4, 64, 64)
         # Compute the loss
-        loss =
-
-
+        loss = sds.sds_loss(
+            latents = latents,
+            text_embeddings = embeddings["default"],
+            text_embeddings_uncond = embeddings["uncond"],
+            guidance_scale = 100,
+        )
 
         # Backward pass
         loss.backward()
@@ -115,7 +123,7 @@ def optimize_mesh_texture(
 
         # clamping the latents to avoid over saturation
         latents.data = latents.data.clip(-1, 1)
-        if i % log_interval == 0 or i == total_iter - 1:
+        if i % log_interval == 0:
             # save the loss
             loss_dict[i] = loss.item()
 
@@ -124,9 +132,17 @@ def optimize_mesh_texture(
             output_im = Image.fromarray(img.astype("uint8"))
             output_path = os.path.join(
                 sds.output_dir,
-                f"output_{prompt[0].replace(' ', '_')}_iter_{i}.png",
+                f"output_iter_{i}.png",
             )
             output_im.save(output_path)
+
+            if save_mesh:
+                render_360_views(
+                    mesh.detach(),
+                    renderer,
+                    device=device,
+                    output_path=osp.join(sds.output_dir, f"output_mesh_{i}.gif"),
+                )
 
     if save_mesh:
         render_360_views(
@@ -142,6 +158,8 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, default="a hamburger")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", type=str, default="output")
+    parser.add_argument("--total_iter", type=int, default=1000)
+    parser.add_argument("--log_interval", type=int, default=100)
     parser.add_argument(
         "--postfix",
         type=str,
@@ -177,6 +195,12 @@ if __name__ == "__main__":
         args.mesh_path is not None
     ), "mesh_path should be provided for optimizing the texture map for a mesh"
     optimize_mesh_texture(
-        sds, mesh_path=args.mesh_path, prompt=args.prompt, device=device, args=args
+        sds,
+        mesh_path=args.mesh_path,
+        prompt=args.prompt,
+        device=device,
+        args=args,
+        total_iter=args.total_iter,
+        log_interval=args.log_interval
     )
     print(f"Optimization took {time.time() - start_time:.2f} seconds")

@@ -155,25 +155,23 @@ class SDS:
 
             noise = torch.randn_like(latents)
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
-            
-            noise_pred_text = self.unet(
-                sample = latents_noisy,
-                timestep = t,
-                encoder_hidden_states = text_embeddings
-            )
-            noise_pred = noise_pred_text['sample']
 
             if text_embeddings_uncond is not None and guidance_scale != 1:
                 ### YOUR CODE HERE ###
-                noise_pred_uncond = self.unet(
+                latent_model_input = torch.cat([latents_noisy] * 2, dim=0)
+                noise_pred = self.unet(
+                    sample = latent_model_input,
+                    timestep = t,
+                    encoder_hidden_states = torch.cat([text_embeddings, text_embeddings_uncond], dim=0)
+                )['sample']
+                noise_pred_text, noise_pred_uncond = noise_pred.chunk(2)
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+            else:
+                noise_pred = self.unet(
                     sample = latents_noisy,
                     timestep = t,
-                    encoder_hidden_states = text_embeddings_uncond
-                )
-                uncond = noise_pred_uncond['sample']
-                noise_pred = uncond + guidance_scale * (
-                    noise_pred - uncond
-                )
+                    encoder_hidden_states = text_embeddings
+                )['sample']
 
         # Compute SDS loss
         w = 1 - self.alphas[t]

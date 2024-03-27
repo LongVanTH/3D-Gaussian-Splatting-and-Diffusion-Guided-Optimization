@@ -107,7 +107,7 @@ def optimize_mesh_texture(
         rend = renderer(mesh, cameras=camera, lights=lights)[..., :3]  # (1, 512, 512, 3)
         rend = rend.permute(0, 3, 1, 2)
         # Encode the rendered image to latents
-        latents = sds.encode_imgs(rend)[0].unsqueeze(0)  # (1, 4, 64, 64)
+        latents = sds.encode_imgs(rend)  # (1, 4, 64, 64)
         # Compute the loss
         loss = sds.sds_loss(
             latents = latents,

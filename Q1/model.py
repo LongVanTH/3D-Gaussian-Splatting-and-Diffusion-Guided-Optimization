@@ -1,7 +1,7 @@
 import math
 import torch
 import numpy as np
-
+from tqdm import tqdm
 from typing import Tuple, Optional
 from pytorch3d.ops.knn import knn_points
 from pytorch3d.renderer.cameras import PerspectiveCameras
@@ -363,7 +363,8 @@ class Gaussians:
         ### YOUR CODE HERE ###
         # HINT: Refer to README for a relevant equation
         x_minus_mu = points_2D - means_2D  # (N, H*W, 2)
-        power = -0.5 * torch.einsum("nij,njk,nik->ni", x_minus_mu, cov_2D_inverse, x_minus_mu)  # (N, H*W)
+        #power = -0.5 * torch.einsum("nij,njk,nik->ni", x_minus_mu, cov_2D_inverse, x_minus_mu)  # (N, H*W)
+        power = -0.5 * torch.sum((x_minus_mu @ cov_2D_inverse) * x_minus_mu, dim=-1)  # (N, H*W)
 
         return power
 
@@ -705,7 +706,7 @@ class Scene:
             depth = torch.zeros((H, W, 1), dtype=torch.float32).to(D)
             mask = torch.zeros((H, W, 1), dtype=torch.float32).to(D)
 
-            for b_idx in range(num_mini_batches):
+            for b_idx in tqdm(range(num_mini_batches)):
 
                 quats_ = quats[b_idx * per_splat: (b_idx+1) * per_splat]
                 scales_ = scales[b_idx * per_splat: (b_idx+1) * per_splat]

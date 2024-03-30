@@ -151,7 +151,10 @@ class SDS:
         # predict the noise residual with unet, NO grad!
         with torch.no_grad():
             ### YOUR CODE HERE ###
-            # Reference: https://github.com/CVMI-Lab/Classifier-Score-Distillation/blob/main/threestudio/models/guidance/stable_diffusion_guidance.py
+            # References:
+            # https://github.com/CVMI-Lab/Classifier-Score-Distillation/blob/main/threestudio/models/guidance/stable_diffusion_guidance.py
+            # https://github.com/ashawkey/stable-dreamfusion/blob/main/guidance/sd_utils.py
+            # https://github.com/ashawkey/stable-dreamfusion/blob/main/assets/advanced.md
 
             noise = torch.randn_like(latents)
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
@@ -176,8 +179,9 @@ class SDS:
         # Compute SDS loss
         w = 1 - self.alphas[t]
         ### YOUR CODE HERE ###
-        grad = w * (noise_pred - noise)
+        grad = grad_scale * w * (noise_pred - noise)
+        grad = torch.nan_to_num(grad)
         target = (latents - grad).detach()
-        loss = 0.5 * F.mse_loss(latents, target, reduction="sum") / latents.shape[0]
+        loss = 0.5 * F.mse_loss(latents, target)
 
         return loss

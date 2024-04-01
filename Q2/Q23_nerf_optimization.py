@@ -22,6 +22,7 @@ def optimize_nerf(
     neg_prompt="",
     device="cpu",
     log_interval=20,
+    view_dependent=False,
     args=None,
 ):
     """
@@ -29,7 +30,7 @@ def optimize_nerf(
     """
 
     # Step 1. Create text embeddings from prompt
-    embeddings = prepare_embeddings(sds, prompt, neg_prompt, view_dependent=False)
+    embeddings = prepare_embeddings(sds, prompt, neg_prompt, view_dependent=view_dependent)
 
     # Step 2. Set up NeRF model
     model = NeRFNetwork(args).to(device)
@@ -150,7 +151,7 @@ def optimize_nerf(
                 outputs["image"].reshape(B, H, W, 3).permute(0, 3, 1, 2).contiguous()
             )  # [B, 3, H, W]
 
-            # Compuate the loss
+            # Compute the loss
             # interpolate text_z
             azimuth = data["azimuth"]  # [-180, 180]
             assert azimuth.shape[0] == 1, "Batch size should be 1"
@@ -160,8 +161,21 @@ def optimize_nerf(
                 text_cond = embeddings["default"]
             else:
                 ### YOUR CODE HERE ###
-                pass
-
+                if azimuth >= -90 and azimuth < 90:
+                    if azimuth >= 0:
+                        r = 1 - azimuth / 90
+                    else:
+                        r = 1 + azimuth / 90
+                    start_z = embeddings["front"]
+                    end_z = embeddings["side"]
+                else:
+                    if azimuth >= 0:
+                        r = 1 - (azimuth - 90) / 90
+                    else:
+                        r = 1 + (azimuth + 90) / 90
+                    start_z = embeddings["side"]
+                    end_z = embeddings["back"]
+                text_cond = r * start_z + (1 - r) * end_z
   
             ### YOUR CODE HERE ###
             pred_rgb = torch.nn.functional.interpolate(pred_rgb, (512, 512), mode='bilinear', align_corners=False)  # (1, 3, 512, 512)
@@ -301,6 +315,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--loss_scaling", type=int, default=1)
+    parser.add_argument("--log_interval", type=int, default=20)
+    parser.add_argument("--view_dep_text", action="store_true", default=False,
+                        help="option to use view dependent text embeddings for nerf optimization")
 
     ### YOUR CODE HERE ###
     # You wil need to tune the following parameters to obtain good NeRF results
@@ -311,22 +328,14 @@ if __name__ == "__main__":
     ### shading options
     parser.add_argument('--latent_iter_ratio', type=float, default=0.2, help="training iters that only use albedo shading")
 
-
     parser.add_argument(
         "--postfix", type=str, default="", help="Postfix for the output directory"
-    )
-    parser.add_argument(
-        "--view_dep_text",
-        type=int,
-        default=0,
-        help="option to use view dependent text embeddings for nerf optimization",
     )
     parser = add_config_arguments(
         parser
     )  # add additional arguments for nerf optimization, You don't need to change the setting here by default
 
     args = parser.parse_args()
-
     seed_everything(args.seed)
 
     # create output directory
@@ -342,5 +351,25 @@ if __name__ == "__main__":
 
     # optimize a NeRF model
     start_time = time.time()
-    optimize_nerf(sds, prompt=args.prompt, device=device, args=args)
+    optimize_nerf(
+        sds,
+        prompt=args.prompt,
+        device=device,
+        log_interval=args.log_interval,
+        view_dependent=args.view_dep_text,
+        args=args
+    )
     print(f"Optimization took {time.time() - start_time:.2f} seconds")
+
+    # Save a frame for each epoch as a GIF
+    for name in ["rgb", "depth"]:
+        frames = []
+        for epoch in range(0, 100, args.log_interval):
+            gif_path = osp.join(output_dir, "videos", f"{name}_ep_{epoch}.gif")
+            gif = imageio.get_reader(gif_path)
+            frame_index = (2 * epoch) % len(gif)
+            frame_data = gif.get_data(frame_index)
+            frame_image = Image.fromarray(frame_data)
+            frames.append(frame_image)
+        output_gif_path = osp.join(output_dir, f"{name}.gif")
+        imageio.mimwrite(output_gif_path, frames, fps=10, loop=0)

@@ -184,4 +184,8 @@ class SDS:
         target = (latents - grad).detach()
         loss = 0.5 * F.mse_loss(latents, target)
 
+        # [Q 2.4.3] Pixel space instead of latent space
+        # target = self.vae.decode((latents - grad) / self.vae.config.scaling_factor)['sample'].detach()
+        # img = self.vae.decode(latents / self.vae.config.scaling_factor)['sample']
+        # loss = 0.5 * F.mse_loss(img, target)
         return loss
